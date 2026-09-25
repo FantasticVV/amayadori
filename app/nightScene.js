@@ -126,7 +126,7 @@ const SYSTEM_PROMPT = [
   "货架（picks）：",
   `- 只能从这些东西里挑三样，不能重复：${SHELF.join("、")}。`,
   `- note 是手写价签的口吻，不超过 ${NOTE_MAX} 个字，具体、有温度，可以俏皮，但不要鸡汤、不要大道理。`,
-  "时间：用户消息开头会告诉你现在几点，深夜、凌晨和傍晚的说法要不一样。",
+  "时间：店里永远是雨夜。用户消息开头如果告诉你现在几点（傍晚、晚上、深夜或凌晨），说法跟着变；没有给时间，就当作夜里。不要提白天、中午、下午。",
   "sceneTag：不超过 15 个字，中间必须有一个标点断开。每次换一种句式，不要重复开头，不要套模板（尤其避免『荧光灯…』『雨还在下…』式开头）。可以是画面、一句对白、一个动作。",
   "边界：",
   "- 如果这句话流露出轻生、自伤的念头或极度的绝望，care=true。这时 greet 和 bye 只说安静、温和、陪着的话，不开玩笑、不劝说、不分析，也不要提热线（产品会另外展示）；雨小一些，灯暖一些，街上安静。",
@@ -240,13 +240,6 @@ function sanitizeScene(o, prompt = "") {
   };
 }
 
-function withTimeout(p, ms, label) {
-  return Promise.race([
-    p,
-    new Promise((_, reject) => setTimeout(() => reject(new Error(`${label} timeout ${ms}ms`)), ms)),
-  ]);
-}
-
 function fallbackScene(prompt = "") {
   return {
     ...DEFAULT_SCENE,
@@ -256,7 +249,8 @@ function fallbackScene(prompt = "") {
   };
 }
 
-// 现在几点（按北京时间），告诉模型：深夜和傍晚，店员说的话不一样
+// 现在几点（按北京时间），告诉模型：深夜和傍晚，店员说的话不一样。
+// 店里永远是雨夜：白天和清晨不报时间，免得店员说出「中午了」
 function nowLabel(d = new Date()) {
   const parts = Object.fromEntries(
     new Intl.DateTimeFormat("zh-CN", { timeZone: "Asia/Shanghai", weekday: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23" })
@@ -264,7 +258,8 @@ function nowLabel(d = new Date()) {
       .map((p) => [p.type, p.value]),
   );
   const h = Number(parts.hour);
-  const part = h < 5 ? "凌晨" : h < 8 ? "清晨" : h < 17 ? "白天" : h < 19 ? "傍晚" : h < 23 ? "晚上" : "深夜";
+  if (h >= 5 && h < 17) return "";
+  const part = h < 5 ? "凌晨" : h < 19 ? "傍晚" : h < 23 ? "晚上" : "深夜";
   return `${parts.weekday} ${parts.hour}:${parts.minute}（${part}）`;
 }
 
@@ -275,27 +270,38 @@ function antiRepeatHint() {
   return `\n最近几次的 sceneTag 和 greet 是：${recent.map((t) => `「${t}」`).join("、")}。这次的句式和开头不要与它们雷同。`;
 }
 
-// 生成今夜；永不 reject —— 失败一律回退默认场景，并带原因供日志排查。
+// 问一次模型：拿到的必须是一个 JSON 对象
+async function askModel(prompt, timeoutMs) {
+  const label = nowLabel();
+  const raw = await ai.chat([{ role: "user", content: `${label ? `现在是${label}。` : ""}这个人说：「${prompt}」\n只输出 json。` }], {
+    system: SYSTEM_PROMPT + antiRepeatHint(),
+    maxTokens: 1200,
+    timeoutMs,
+  });
+  const obj = extractJson(raw);
+  if (!obj || typeof obj !== "object" || Array.isArray(obj)) throw new Error("unparseable model output");
+  return obj;
+}
+
+// 生成今夜；永不 reject。第一次失败（超时 / 空回复 / 不是 JSON）就再问一次，
+// 两次都失败才回退默认场景，并带原因供日志排查。总共最多等 28 秒。
+const BUDGET_MS = 28000;
 async function generateSceneSafe(prompt) {
-  try {
-    const raw = await withTimeout(
-      ai.chat([{ role: "user", content: `现在是${nowLabel()}。这个人说：「${prompt}」\n只输出 json。` }], {
-        system: SYSTEM_PROMPT + antiRepeatHint(),
-        maxTokens: 800,
-      }),
-      30000,
-      "ai.chat",
-    );
-    const obj = extractJson(raw);
-    if (!obj || typeof obj !== "object" || Array.isArray(obj)) {
-      return { scene: fallbackScene(prompt), fallback: true, reason: "unparseable model output" };
+  const t0 = Date.now();
+  const reasons = [];
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const left = BUDGET_MS - (Date.now() - t0);
+    if (left < 4000) break;
+    try {
+      const obj = await askModel(prompt, attempt === 0 ? Math.min(16000, left) : left);
+      const scene = sanitizeScene(obj, prompt);
+      recent = [scene.sceneTag, scene.greet, ...recent].filter(Boolean).slice(0, 4);
+      return { scene, fallback: false, reason: reasons.length ? `retried after: ${reasons.join("; ")}` : null };
+    } catch (e) {
+      reasons.push(e.message);
     }
-    const scene = sanitizeScene(obj, prompt);
-    recent = [scene.sceneTag, scene.greet, ...recent].filter(Boolean).slice(0, 4);
-    return { scene, fallback: false, reason: null };
-  } catch (e) {
-    return { scene: fallbackScene(prompt), fallback: true, reason: e.message };
   }
+  return { scene: fallbackScene(prompt), fallback: true, reason: reasons.join("; ") || "no time left" };
 }
 
 module.exports = { generateSceneSafe, sanitizeScene, extractJson, nowLabel, DEFAULT_SCENE, SHELF };

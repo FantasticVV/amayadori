@@ -1,7 +1,8 @@
 // 雨宿り AMAYADORI —— 「一句话 → 今夜」生成器。
 // 后端唯一职责：调大模型（app/llm.js），把用户的一句话变成两样东西，压成严格 JSON：
 //   1) 今夜的环境：雨、风、灯光、车流、声音；
-//   2) 店里的几句话：店员进门和结账时各一句、货架上三张手写价签、一句今夜字幕。
+//   2) 店里的几句话：店员进门和结账时各一句、货架上三张手写价签、一句今夜字幕；
+//   3) 店里放哪首音乐（跟着这个人的心情）。
 // 任何一步失败（超时 / 非 JSON / 字段越界）都回退到默认场景，绝不 500。
 
 const ai = require("./llm");
@@ -19,7 +20,7 @@ const LINE_MAX = 24; // 店员说的一句
 // 用 JSON Schema 约束模型输出（放进 system prompt，模型按 schema 吐 JSON）。
 const SCENE_JSON_SCHEMA = {
   type: "object",
-  required: ["rain", "wind", "lightTemp", "traffic", "ambient", "picks", "clerkMood", "greet", "bye", "sceneTag", "care"],
+  required: ["rain", "wind", "lightTemp", "traffic", "ambient", "picks", "clerkMood", "greet", "bye", "sceneTag", "music", "care"],
   additionalProperties: false,
   properties: {
     rain: {
@@ -65,6 +66,10 @@ const SCENE_JSON_SCHEMA = {
       maxLength: 15,
       description: "今夜的字幕：对这个人说的一句话，接住他的心情，邀他进店。不超过15个字，中间有一个标点断开",
     },
+    music: {
+      enum: ["low", "calm", "warm", "bright"],
+      description: "店里放的音乐，跟着这个人此刻的心情：low=难过、委屈、失落；calm=累了、平静、放空；warm=馋了、想吃点东西、平常的一天；bright=开心、有好事、想庆祝",
+    },
     care: {
       type: "boolean",
       description: "这句话里是否流露出轻生、自伤的念头或极度的绝望。只有明确流露时才为 true",
@@ -87,6 +92,7 @@ const EXAMPLES = [
       greet: "外面雨大，进来待会儿。",
       bye: "今天就到这儿吧。",
       sceneTag: "委屈先放一放，进来暖暖手",
+      music: "low",
       care: false,
     },
   },
@@ -103,6 +109,7 @@ const EXAMPLES = [
       greet: "今天心情不错嘛，雨都下小了。",
       bye: "假期愉快，伞别忘了拿。",
       sceneTag: "假期要来了，先吃点好的",
+      music: "bright",
       care: false,
     },
   },
@@ -126,6 +133,7 @@ const SYSTEM_PROMPT = [
   "货架（picks）：",
   `- 只能从这些东西里挑三样，不能重复：${SHELF.join("、")}。`,
   `- note 是手写价签的口吻，不超过 ${NOTE_MAX} 个字，具体、有温度，可以俏皮，但不要鸡汤、不要大道理。`,
+  "音乐（music）：看这个人此刻的心情选一首。难过、委屈、失落 → low；累了、平静、放空 → calm；馋了、想吃点东西、平常的一天 → warm；开心、有好事、想庆祝 → bright。",
   "时间：店里永远是雨夜。用户消息开头如果告诉你现在几点（傍晚、晚上、深夜或凌晨），说法跟着变；没有给时间，就当作夜里。不要提白天、中午、下午。",
   "sceneTag（今夜的字幕，出现在街上和小票上）：对这个人说的一句话。先接住他此刻的心情，再轻轻邀他进店：心情差，就让他把情绪先放一放、进来待一会儿；有好事，就陪他高兴、进来庆祝一下。不超过 15 个字，中间必须有一个标点断开。不要描写雨、灯和街景（画面里已经有了），不要复述他的原话，不要和 greet 说成同一个意思。每次换一种说法，不要套模板。",
   "边界：",
@@ -155,11 +163,13 @@ const DEFAULT_SCENE = Object.freeze({
   greet: "",
   bye: "",
   sceneTag: "雨一直下，店里很安静",
+  music: "calm",
   care: false,
 });
 
 const AMBIENTS = new Set(["quiet", "street", "storm"]);
 const MOODS = new Set(["sleepy", "chatty", "quiet"]);
+const MUSICS = new Set(["low", "calm", "warm", "bright"]);
 // 明确流露轻生念头的说法：模型漏判时的兜底（只在小票底部多一行热线，误判的代价很小）
 const CARE_RE = /(不想活|活不下去|活着没意思|活着没有意义|想自杀|自杀|轻生|结束生命|结束自己|想消失|不想醒来)/;
 
@@ -224,6 +234,7 @@ function sanitizePicks(v) {
 // 逐字段清洗：越界夹紧、非法枚举/类型回退该字段默认值。
 function sanitizeScene(o, prompt = "") {
   const picks = sanitizePicks(o.picks);
+  const care = o.care === true || CARE_RE.test(prompt);
   return {
     rain: round2(clampNum(o.rain, RAIN_MIN, RAIN_MAX, DEFAULT_SCENE.rain)),
     wind: round2(clampNum(o.wind, 0, 1, DEFAULT_SCENE.wind)),
@@ -236,7 +247,8 @@ function sanitizeScene(o, prompt = "") {
     greet: cleanLine(o.greet, LINE_MAX),
     bye: cleanLine(o.bye, LINE_MAX),
     sceneTag: cleanLine(o.sceneTag, 15) || DEFAULT_SCENE.sceneTag,
-    care: o.care === true || CARE_RE.test(prompt),
+    music: care ? "low" : MUSICS.has(o.music) ? o.music : DEFAULT_SCENE.music, // 流露轻生念头时只放最轻的那首
+    care,
   };
 }
 
@@ -245,6 +257,7 @@ function fallbackScene(prompt = "") {
     ...DEFAULT_SCENE,
     picks: DEFAULT_PICKS.map((p) => ({ ...p })),
     shelfTheme: [...DEFAULT_SCENE.shelfTheme],
+    music: CARE_RE.test(prompt) ? "low" : DEFAULT_SCENE.music,
     care: CARE_RE.test(prompt),
   };
 }

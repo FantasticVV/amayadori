@@ -625,3 +625,160 @@ body {
   background: #2b2a26;
   color: #ece7dc;
 }
+
+/* ---------- 手机：输入框字号不小于 16px（iPhone 聚焦时才不会自动放大页面） ---------- */
+
+@media (pointer: coarse) {
+  .prompt-row input,
+  .prompt--compact .prompt-row input {
+    font-size: 16px;
+  }
+}
+
+/* ---------- 横屏的手机：屏幕矮，字和输入框往下收，把街景让出来 ---------- */
+
+@media (orientation: landscape) and (max-height: 500px) {
+  .brand-corner {
+    top: 12px;
+    left: 16px;
+    font-size: 12px;
+  }
+
+  .stage--center {
+    padding-bottom: 16px;
+  }
+
+  .stage--bottom {
+    padding-bottom: 12px;
+  }
+
+  .prompt-kicker {
+    display: none;
+  }
+
+  .prompt-row input {
+    padding: 10px 16px;
+  }
+
+  .prompt-hint {
+    margin-top: 8px;
+  }
+
+  .line-quote {
+    bottom: 74px;
+    font-size: 12px;
+  }
+
+  .subtitle {
+    bottom: 40px;
+    font-size: 15px;
+  }
+
+  .reopen-btn {
+    left: 12px;
+    bottom: 10px;
+  }
+}
+
+/* ---------- 手机竖着拿：请横过来 ---------- */
+
+.rotate {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 28px calc(32px + env(safe-area-inset-bottom, 0px));
+  background: radial-gradient(ellipse at 50% 56%, var(--night-1) 0%, var(--night-0) 58%, #06101c 100%);
+  text-align: center;
+  animation: canvas-in 0.6s ease both;
+}
+
+.rotate-phone {
+  position: relative;
+  width: 34px;
+  height: 58px;
+  margin: 0 auto 30px;
+  border: 1.5px solid rgba(179, 175, 166, 0.72);
+  border-radius: 8px;
+  animation: rotate-turn 3.4s ease-in-out infinite;
+}
+
+/* 屏幕里亮着的那家店 */
+.rotate-phone span {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 12px;
+  height: 7px;
+  margin: -3.5px 0 0 -6px;
+  border-radius: 1.5px;
+  background: #e2b273;
+  box-shadow: 0 0 12px 3px rgba(226, 178, 115, 0.42);
+}
+
+@keyframes rotate-turn {
+  0%,
+  22% {
+    transform: rotate(0deg);
+  }
+  44%,
+  80% {
+    transform: rotate(-90deg);
+  }
+  100% {
+    transform: rotate(0deg);
+  }
+}
+
+.rotate-title {
+  font-family: var(--font-serif);
+  font-weight: 400;
+  font-size: 19px;
+  letter-spacing: 0.32em;
+  padding-left: 0.32em;
+  color: var(--hl);
+  text-shadow: 0 0 18px rgba(134, 109, 78, 0.5);
+}
+
+.rotate-text {
+  margin-top: 16px;
+  font-family: var(--font-serif);
+  font-size: 14px;
+  line-height: 2;
+  letter-spacing: 0.14em;
+  color: rgba(179, 175, 166, 0.78);
+}
+
+.rotate-note {
+  margin-top: 26px;
+  font-size: 11px;
+  line-height: 1.9;
+  letter-spacing: 0.08em;
+  color: rgba(143, 163, 184, 0.58);
+}
+
+.rotate-skip {
+  margin-top: 28px;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  letter-spacing: 0.2em;
+  color: rgba(179, 175, 166, 0.82);
+  background: transparent;
+  border: 1px solid rgba(134, 109, 78, 0.5);
+  border-radius: 999px;
+  padding: 9px 22px;
+  cursor: pointer;
+}
+
+.rotate-skip:active {
+  background: rgba(134, 109, 78, 0.2);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rotate-phone {
+    animation: none;
+    transform: rotate(-90deg);
+  }
+}

@@ -2,13 +2,15 @@
 // 流程：开场（街景 iframe + 输入框）→ 一句话生成今夜参数 → postMessage 给街景
 //   → 走到店门口、推门、店里挑东西、结账出小票、窗边坐一会儿，全部在 iframe 里完成
 //   → 收到 amayadori:door 收起街上的字和输入框；收到 amayadori:street 恢复。
-// 手机竖着拿：先盖一层「把手机横过来」，街景在底下照常加载，开场视频等横过来再放。
+// 开场先停着：等用户点一下「点一下，雨就开始下」，雨声和开场视频一起开始（浏览器规定点过才能出声）。
+// 手机竖着拿：先盖一层「把手机横过来」，转过来再点那一下。
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { BRAND } from "./config/brand";
 import Subtitle from "./components/Subtitle";
 import PromptBar from "./components/PromptBar";
 import RotateHint from "./components/RotateHint";
+import StartGate from "./components/StartGate";
 
 const PORTRAIT_PHONE = "(orientation: portrait) and (pointer: coarse)";
 const isPortraitPhone = () => !!(window.matchMedia && window.matchMedia(PORTRAIT_PHONE).matches);
@@ -48,10 +50,11 @@ export default function App() {
   const portrait = usePortraitPhone();
   const [dismissed, setDismissed] = useState(false);
   const rotateOn = portrait && !dismissed;
-  // 一打开就是竖屏：街景带 hold 加载，开场视频等横过来（或点了竖着看）再放
-  const [hold] = useState(isPortraitPhone);
-  const startedRef = useRef(!hold);
+  // 街景加载好（ready）之后出「点一下」；点过（started）才出输入框
+  const [ready, setReady] = useState(false);
+  const [started, setStarted] = useState(false);
   const readyRef = useRef(false);
+  const startedRef = useRef(false);
 
   useEffect(() => {
     document.title = BRAND.displayName;
@@ -61,11 +64,32 @@ export default function App() {
     iframeRef.current?.contentWindow?.postMessage(msg, "*");
   }, []);
 
-  useEffect(() => {
-    if (rotateOn || startedRef.current) return;
+  // 点一下：在这次点击里直接叫街景开始（iPhone 要求出声必须发生在点击里），再补一条消息兜底
+  const startScene = useCallback(() => {
+    if (startedRef.current) return;
     startedRef.current = true;
-    if (readyRef.current) postToStreet({ type: "amayadori:go" });
-  }, [rotateOn, postToStreet]);
+    setStarted(true);
+    try {
+      iframeRef.current?.contentWindow?.AMAYADORI?.start();
+    } catch (e) {
+      /* 拿不到就只靠下面的消息 */
+    }
+    postToStreet({ type: "amayadori:go" });
+  }, [postToStreet]);
+
+  const skipRotate = useCallback(() => {
+    setDismissed(true);
+    if (readyRef.current) startScene(); // 这一下也算「点一下」
+  }, [startScene]);
+
+  // 街景一直没说 ready（加载失败之类）：15 秒后也让用户能往下走
+  useEffect(() => {
+    const t = setTimeout(() => {
+      readyRef.current = true;
+      setReady(true);
+    }, 15000);
+    return () => clearTimeout(t);
+  }, []);
 
   const onIframeLoad = useCallback(() => {
     if (pendingSceneRef.current) postToStreet(pendingSceneRef.current);
@@ -108,7 +132,7 @@ export default function App() {
       if (!d || typeof d !== "object") return;
       if (d.type === "amayadori:ready") {
         readyRef.current = true;
-        if (startedRef.current) postToStreet({ type: "amayadori:go" });
+        setReady(true);
       } else if (d.type === "amayadori:door") {
         setView("inside");
         setPromptOpen(false);
@@ -119,7 +143,7 @@ export default function App() {
     };
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, [postToStreet]);
+  }, []);
 
   // 街上：生成后 4.5 秒收起输入框
   useEffect(() => {
@@ -144,7 +168,7 @@ export default function App() {
       <iframe
         ref={iframeRef}
         className="street-iframe"
-        src={hold ? "amayadori.html?embed&hold" : "amayadori.html?embed"}
+        src="amayadori.html?embed&hold"
         title="雨宿り"
         onLoad={onIframeLoad}
         allow="autoplay"
@@ -163,8 +187,8 @@ export default function App() {
         </>
       )}
 
-      {/* 输入框：开场和街上（可收起）；进店后不显示 */}
-      {view !== "inside" && (
+      {/* 输入框：点过「点一下」之后才出；开场和街上（可收起）；进店后不显示 */}
+      {started && view !== "inside" && (
         <main className={`stage${view === "intro" ? " stage--center" : " stage--bottom"}`}>
           <div className={`prompt-wrap${view !== "intro" && !promptOpen ? " prompt-wrap--hidden" : ""}`}>
             <PromptBar
@@ -178,7 +202,8 @@ export default function App() {
         </main>
       )}
 
-      {rotateOn && <RotateHint onDismiss={() => setDismissed(true)} />}
+      {ready && !started && !rotateOn && <StartGate onStart={startScene} />}
+      {rotateOn && <RotateHint onDismiss={skipRotate} />}
     </div>
   );
 }

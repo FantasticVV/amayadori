@@ -88,7 +88,18 @@ app.get("/api/voice/:id", async (req, res) => {
   res.end(buf);
 });
 
-app.use(express.static(STATIC_DIR, { index: "index.html", maxAge: "1h" }));
+// 页面（.html）每次都跟服务器确认一下有没有更新，改了代码大家马上看到新版；
+// 带指纹的打包文件（assets/）内容变了名字就变，可以放心缓存很久；画、视频、声音缓存 1 小时
+app.use(
+  express.static(STATIC_DIR, {
+    index: "index.html",
+    maxAge: "1h",
+    setHeaders(res, file) {
+      if (file.endsWith(".html")) res.setHeader("Cache-Control", "no-cache");
+      else if (file.includes(`${path.sep}assets${path.sep}`)) res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+    },
+  }),
+);
 
 const PORT = parseInt(process.env.PORT || process.env.APP_PORT || "3000", 10);
 app.listen(PORT, "0.0.0.0", () => {

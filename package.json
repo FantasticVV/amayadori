@@ -1,0 +1,20 @@
+{
+  "name": "amayadori",
+  "version": "1.0.0",
+  "private": true,
+  "description": "雨宿り AMAYADORI：说一句今晚，走进为你下着雨的便利店",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "vite build",
+    "start": "node app/server.js"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "^4.3.1",
+    "express": "^4.19.2",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "vite": "^5.4.0"
+  }
+}

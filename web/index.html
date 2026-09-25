@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="zh">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#0A1828" />
+    <link rel="icon" href="data:," />
+    <!-- 标题由 src/config/brand.ts 在启动时写入（店名单一真源），这里不写店名 -->
+    <title></title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        background: #0a1828;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <!-- 相对路径：部署在子路径下也能找到资源，构建时 Vite 会改写成 ./assets/xxx -->
+    <script type="module" src="./src/main.jsx"></script>
+  </body>
+</html>

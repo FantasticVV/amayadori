@@ -1,0 +1,16 @@
+# Render 一键部署（New → Blueprint 选这个仓库）
+services:
+  - type: web
+    name: amayadori
+    runtime: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: AI_BASE_URL
+        value: https://api.deepseek.com
+      - key: AI_MODEL
+        value: deepseek-flash
+      - key: AI_API_KEY
+        sync: false

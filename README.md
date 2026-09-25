@@ -23,11 +23,13 @@ AI_API_KEY=你的Key npm start
 
 Key 也可以写进工程根目录的 `.env`（参照 `.env.example`）。没有 Key 也能运行，只是每次都是同一个默认的夜晚。
 
+店员开口说话（可选）：再配一个阿里云百炼的 Key，`TTS_API_KEY=你的Key`。默认用 CosyVoice 的「龙媛」（`TTS_VOICE=longyuan_v3`）。不配就只显示文字。
+
 默认使用 DeepSeek。换成其他 OpenAI 兼容的接口（通义千问、Kimi、智谱等），修改 `AI_BASE_URL` 和 `AI_MODEL` 即可。
 
 ## 部署
 
-仓库里带了 `render.yaml`。在 Render 选 New → Blueprint，选中这个仓库，按提示填入 `AI_API_KEY`。
+仓库里带了 `render.yaml`。在 Render 选 New → Blueprint，选中这个仓库，按提示填入 `AI_API_KEY`；想让店员说话，再填 `TTS_API_KEY`。
 
 ## 目录
 
@@ -35,9 +37,11 @@ Key 也可以写进工程根目录的 `.env`（参照 `.env.example`）。没有
 app/server.js              服务端：接口、限流、托管前端
 app/nightScene.js          一句话 → 今夜：提示词、JSON 约束、逐字段清洗、兜底
 app/llm.js                 调用大模型（OpenAI 兼容接口）
+app/tts.js                 店员两句话的语音（阿里云百炼 CosyVoice，可选）
 web/src/                   外层页面：输入框、字幕
 web/public/amayadori.html  场景：街上、店里、窗边（WebGL 让手绘画面动起来，单文件）
 web/public/*.mp4           三段过场视频
+web/public/*.mp3           雨声、开场车声、欢迎光临、店里的四首音乐
 ```
 
 ## AI 的边界
@@ -51,3 +55,9 @@ web/public/*.mp4           三段过场视频
 ## 素材
 
 场景画面由 Midjourney 生成，过场视频由 Runway 生成；雨、积水、车灯、热气等动态效果由 WebGL 着色器实时绘制。
+
+声音：
+- 雨声、车声录音来自 [Moodist](https://github.com/remvze/moodist)（CC0 / Pixabay Content License）
+- 店里的音乐来自 [Open Lo-Fi](https://github.com/btahir/open-lofi)（CC0）
+- 日语「いらっしゃいませ」：VOICEVOX:春日部つむぎ
+- 店员的中文语音：阿里云百炼 CosyVoice（运行时合成）

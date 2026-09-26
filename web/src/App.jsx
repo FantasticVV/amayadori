@@ -42,6 +42,7 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [promptOpen, setPromptOpen] = useState(true);
+  const [walking, setWalking] = useState(false); // 点了「往店里走」，正在走过去
 
   const iframeRef = useRef(null);
   const pendingSceneRef = useRef(null); // iframe 还没加载完时，load 后补发
@@ -113,7 +114,8 @@ export default function App() {
         const msg = { type: "amayadori:setScene", scene: { ...data, line: prompt } };
         pendingSceneRef.current = msg;
         postToStreet(msg);
-        setPromptOpen(true);
+        setPromptOpen(false);
+        setWalking(false);
         setView("street");
       } catch (e) {
         setError("今晚的雨没有落下来，再试一次。");
@@ -139,19 +141,18 @@ export default function App() {
       } else if (d.type === "amayadori:street") {
         setView((v) => (v === "inside" ? "street" : v));
         setVisit((n) => n + 1);
+        setWalking(false);
       }
     };
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
   }, []);
 
-  // 街上：生成后 4.5 秒收起输入框
-  useEffect(() => {
-    if (view === "street" && promptOpen) {
-      const t = setTimeout(() => setPromptOpen(false), 4500);
-      return () => clearTimeout(t);
-    }
-  }, [view, promptOpen]);
+  // 往店里走：街景自己走到门口、推门进去（开场视频还没放完就等它放完）
+  const walkIn = useCallback(() => {
+    setWalking(true);
+    postToStreet({ type: "amayadori:openDoor" });
+  }, [postToStreet]);
 
   // Esc 唤回输入框（只在街上）
   useEffect(() => {
@@ -176,15 +177,22 @@ export default function App() {
 
       <header className="brand-corner">{BRAND.displayName}</header>
 
-      {/* 街上：输入框收起后，留这句话 + 今夜字幕 + 换个夜晚 */}
+      {/* 街上：这句话 + 今夜字幕 + 「往店里走」；左下角可以换个夜晚 */}
       {view === "street" && nightScene && !promptOpen && (
         <>
           <div className="line-quote">{line}</div>
           <Subtitle key={`street-${visit}-${nightScene.sceneTag}`} text={nightScene.sceneTag} />
-          <button type="button" className="reopen-btn" onClick={() => setPromptOpen(true)}>
-            {loading ? "正在落雨 …" : "✎ 换个夜晚"}
-          </button>
+          {!walking && (
+            <button type="button" className="enter-cta" key={`cta-${visit}-${nightScene.sceneTag}`} onClick={walkIn}>
+              往店里走 →
+            </button>
+          )}
         </>
+      )}
+      {view === "street" && nightScene && (
+        <button type="button" className="reopen-btn" onClick={() => setPromptOpen((v) => !v)}>
+          {promptOpen ? "收起" : "✎ 换个夜晚"}
+        </button>
       )}
 
       {/* 输入框：点过「点一下」之后才出；开场和街上（可收起）；进店后不显示 */}

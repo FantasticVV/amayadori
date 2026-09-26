@@ -64,7 +64,7 @@ body {
 .line-quote {
   position: fixed;
   left: 50%;
-  bottom: 96px;
+  bottom: 140px;
   transform: translateX(-50%);
   z-index: 25;
   max-width: 80vw;
@@ -415,7 +415,7 @@ body {
 .subtitle {
   position: fixed;
   left: 50%;
-  bottom: 52px;
+  bottom: 96px;
   transform: translateX(-50%) translateY(10px);
   z-index: 25;
   font-family: var(--font-serif);
@@ -665,12 +665,12 @@ body {
   }
 
   .line-quote {
-    bottom: 74px;
+    bottom: 100px;
     font-size: 12px;
   }
 
   .subtitle {
-    bottom: 40px;
+    bottom: 66px;
     font-size: 15px;
   }
 
@@ -854,5 +854,112 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .gate-line {
     animation: none;
+  }
+}
+
+/* ---------- 街上：往店里走（生成好今夜之后的下一步） ---------- */
+
+.enter-cta {
+  position: fixed;
+  left: 50%;
+  bottom: 30px;
+  z-index: 26;
+  transform: translateX(-50%);
+  font-family: var(--font-ui);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.24em;
+  padding: 12px 30px 12px calc(30px + 0.24em);
+  color: #2b2016;
+  background: rgba(244, 222, 184, 0.94);
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  animation: cta-in 0.8s ease 0.9s both, cta-glow 2.6s ease-in-out 1.8s infinite;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.enter-cta:hover {
+  background: #f7e4c2;
+}
+
+@keyframes cta-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 10px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+@keyframes cta-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(244, 222, 184, 0), 0 8px 24px rgba(0, 0, 0, 0.35);
+  }
+  50% {
+    box-shadow: 0 0 0 9px rgba(244, 222, 184, 0.14), 0 8px 24px rgba(0, 0, 0, 0.35);
+  }
+}
+
+/* ---------- 等 AI 的那几秒：进度光 + 一句一句换的提示 ---------- */
+
+.prompt--loading .prompt-row input {
+  opacity: 0.72;
+}
+
+.prompt-progress {
+  position: relative;
+  height: 2px;
+  margin-top: 10px;
+  overflow: hidden;
+  border-radius: 1px;
+  background: rgba(134, 109, 78, 0.25);
+}
+
+.prompt-progress span {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -35%;
+  width: 35%;
+  background: linear-gradient(90deg, rgba(240, 192, 122, 0), rgba(240, 192, 122, 0.95), rgba(240, 192, 122, 0));
+  animation: prompt-progress 1.5s ease-in-out infinite;
+}
+
+@keyframes prompt-progress {
+  to {
+    left: 100%;
+  }
+}
+
+.prompt-hint--wait {
+  margin-top: 10px;
+  font-size: 13px;
+  letter-spacing: 0.2em;
+  color: rgba(236, 226, 206, 0.92);
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.85);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .enter-cta {
+    animation: none;
+  }
+
+  .prompt-progress span {
+    animation-duration: 3s;
+  }
+}
+
+/* 横屏的手机：往店里走再往下收一点，别压住今夜字幕（要写在 .enter-cta 本身的样式后面才生效） */
+@media (orientation: landscape) and (max-height: 500px) {
+  .enter-cta {
+    bottom: 12px;
+    padding: 9px 24px 9px calc(24px + 0.24em);
+    font-size: 14px;
   }
 }

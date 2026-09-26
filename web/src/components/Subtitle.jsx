@@ -1,16 +1,13 @@
 import React, { useEffect, useState } from "react";
 
-// sceneTag 开场字幕：淡入 → 停留 → 淡出。每次生成新场景重新播一遍。
+// sceneTag 今夜字幕：淡入后一直留在街上（和「往店里走」一起，是对这个人说的那句话）。
+// 每次生成新场景、回到街上都重新淡入一遍。
 export default function Subtitle({ text }) {
   const [shown, setShown] = useState(false);
   useEffect(() => {
     setShown(false);
-    const t1 = setTimeout(() => setShown(true), 200);
-    const t2 = setTimeout(() => setShown(false), 5600);
-    return () => {
-      clearTimeout(t1);
-      clearTimeout(t2);
-    };
+    const t = setTimeout(() => setShown(true), 200);
+    return () => clearTimeout(t);
   }, [text]);
 
   return (

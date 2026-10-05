@@ -4,6 +4,8 @@
 //   → 收到 amayadori:door 收起街上的字和输入框；收到 amayadori:street 恢复。
 // 开场先停着：等用户点一下「点一下，雨就开始下」，雨声和开场视频一起开始（浏览器规定点过才能出声）。
 // 手机竖着拿：先盖一层「把手机横过来」，转过来再点那一下。
+// 网慢的时候街景要下一会儿：街景一跑起来就发 amayadori:boot（自己显示下载进度），开张了发 amayadori:ready。
+// 这两个消息一到，就把之前可能没收到的（点过一下、今晚的参数、往店里走）补发一遍，街景那边同一份只用一次。
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { BRAND } from "./config/brand";
@@ -56,6 +58,8 @@ export default function App() {
   const [started, setStarted] = useState(false);
   const readyRef = useRef(false);
   const startedRef = useRef(false);
+  const bootRef = useRef(false); // 街景的脚本已经跑起来了（之后由它自己显示进度）
+  const walkRef = useRef(false); // 点了「往店里走」，还没进门
 
   useEffect(() => {
     document.title = BRAND.displayName;
@@ -63,6 +67,15 @@ export default function App() {
 
   const postToStreet = useCallback((msg) => {
     iframeRef.current?.contentWindow?.postMessage(msg, "*");
+  }, []);
+
+  // 在用户的点击里叫街景「醒一下声音」：iPhone 上声音被挂起、店里的音乐没解锁，都要在点击里才恢复得了
+  const unlockAudio = useCallback(() => {
+    try {
+      iframeRef.current?.contentWindow?.AMAYADORI?.unlock?.();
+    } catch (e) {
+      /* 拿不到就算了 */
+    }
   }, []);
 
   // 点一下：在这次点击里直接叫街景开始（iPhone 要求出声必须发生在点击里），再补一条消息兜底
@@ -83,14 +96,29 @@ export default function App() {
     if (readyRef.current) startScene(); // 这一下也算「点一下」
   }, [startScene]);
 
-  // 街景一直没说 ready（加载失败之类）：15 秒后也让用户能往下走
+  // 街景的脚本 15 秒还没跑起来（页面都没下完）：也先让用户点一下、说句话；等它跑起来再把这些补发过去
   useEffect(() => {
     const t = setTimeout(() => {
+      if (bootRef.current) return; // 已经在下画了，进度条在走，等它开张
       readyRef.current = true;
       setReady(true);
     }, 15000);
     return () => clearTimeout(t);
   }, []);
+
+  // 补发：点过一下就再叫一次开始；今晚的参数、「往店里走」也再发一遍
+  const resync = useCallback(() => {
+    if (startedRef.current) {
+      try {
+        iframeRef.current?.contentWindow?.AMAYADORI?.start();
+      } catch (e) {
+        /* 拿不到就只靠下面的消息 */
+      }
+      postToStreet({ type: "amayadori:go" });
+    }
+    if (pendingSceneRef.current) postToStreet(pendingSceneRef.current);
+    if (walkRef.current) postToStreet({ type: "amayadori:openDoor" });
+  }, [postToStreet]);
 
   const onIframeLoad = useCallback(() => {
     if (pendingSceneRef.current) postToStreet(pendingSceneRef.current);
@@ -99,6 +127,7 @@ export default function App() {
   // 一句话 → /api/night/scene → 今夜参数整份发给街景（货架、店员、字幕也在里面）
   const generate = useCallback(
     async (prompt) => {
+      unlockAudio();
       setLoading(true);
       setError("");
       try {
@@ -116,6 +145,7 @@ export default function App() {
         postToStreet(msg);
         setPromptOpen(false);
         setWalking(false);
+        walkRef.current = false;
         setView("street");
       } catch (e) {
         setError("今晚的雨没有落下来，再试一次。");
@@ -123,7 +153,7 @@ export default function App() {
         setLoading(false);
       }
     },
-    [postToStreet],
+    [postToStreet, unlockAudio],
   );
 
   // 街景里的进度：推门进店 / 回到街上
@@ -132,13 +162,20 @@ export default function App() {
       if (e.source !== iframeRef.current?.contentWindow) return; // 只信自家 iframe
       const d = e.data;
       if (!d || typeof d !== "object") return;
-      if (d.type === "amayadori:ready") {
+      if (d.type === "amayadori:boot") {
+        bootRef.current = true;
+        resync();
+      } else if (d.type === "amayadori:ready") {
+        bootRef.current = true;
         readyRef.current = true;
         setReady(true);
+        resync();
       } else if (d.type === "amayadori:door") {
+        walkRef.current = false;
         setView("inside");
         setPromptOpen(false);
       } else if (d.type === "amayadori:street") {
+        walkRef.current = false;
         setView((v) => (v === "inside" ? "street" : v));
         setVisit((n) => n + 1);
         setWalking(false);
@@ -146,13 +183,15 @@ export default function App() {
     };
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, []);
+  }, [resync]);
 
   // 往店里走：街景自己走到门口、推门进去（开场视频还没放完就等它放完）
   const walkIn = useCallback(() => {
+    unlockAudio();
     setWalking(true);
+    walkRef.current = true;
     postToStreet({ type: "amayadori:openDoor" });
-  }, [postToStreet]);
+  }, [postToStreet, unlockAudio]);
 
   // Esc 唤回输入框（只在街上）
   useEffect(() => {

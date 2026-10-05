@@ -1,1 +1,18 @@
+# 让 Render 免费版别睡着：每 10 分钟敲一下 /health。
+# 免费版 15 分钟没人访问就休眠，下一个打开的人要多等 50 秒左右，这个时候慢网的人更容易以为打不开。
+# 一个服务一直醒着大约用掉免费额度（每月 750 小时）里的 720 小时左右。
+# 不想要了：删掉这个文件，或者在仓库的 Actions 页面里把 keep-awake 停用。
+name: keep-awake
 
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: ping /health
+        run: curl -fsS --max-time 90 --retry 2 https://amayadori-vpfj.onrender.com/health || true
